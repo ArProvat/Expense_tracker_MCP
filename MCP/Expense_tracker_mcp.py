@@ -6,12 +6,14 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 import asyncio
 from typing import List, Optional
-from models import Base, user, expense
+from .models import Base, User, Expense
 import datetime
 
+user=User
+expense=Expense
 # Load environment variables
 load_dotenv()
-DATABASE_URL = os.getenv("POSTGRES_URL")  
+DATABASE_URL = os.getenv("DATABASE_URL")  
 print(f"Using database URL: {DATABASE_URL}")
 engine = create_async_engine(DATABASE_URL, echo=True)
 SessionLocal = sessionmaker(expire_on_commit=False, class_=AsyncSession, bind=engine)
@@ -20,10 +22,35 @@ SessionLocal = sessionmaker(expire_on_commit=False, class_=AsyncSession, bind=en
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+from contextlib import asynccontextmanager
 
-# Initialize FastMCP server
-mcp = FastMCP("Expense Tracker MCP")
+@asynccontextmanager
+async def lifespan(app):
+    await init_db()
+    yield
 
+mcp = FastMCP("Expense Tracker MCP", lifespan=lifespan)
+
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+
+mcp = FastMCP("MyServer")
+
+# Configure CORS for browser-based clients
+middleware = [
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow all origins; use specific origins for security
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "mcp-protocol-version",
+            "mcp-session-id",
+            "Authorization",
+            "Content-Type",
+        ],
+        expose_headers=["mcp-session-id"],
+    )
+]
 # ------------------- MCP Tools -------------------
 
 @mcp.tool
@@ -186,16 +213,3 @@ async def get_categories():
     """Get all categories"""
     with open(categories_path, "r", encoding="utf-8") as f:
         return f.read()
-
-
-# ------------------- Run MCP -------------------
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(init_db())
-        print("Database initialized successfully")
-    except Exception as e:
-        print(f"Database initialization error: {e}")
-        # Optionally continue anyway if tables already exist
-    
-    mcp.run()

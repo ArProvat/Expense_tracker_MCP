@@ -1,7 +1,18 @@
 version: "3.8"
 services:
+  my-expense-mcp:
+    build: .
+    container_name: my-expense-mcp
+    ports:
+      - "8888:8888"
+    depends_on:
+      postgres:
+        condition: service_healthy  # Wait for the healthcheck to pass
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/expenses
+
   postgres:
-    image: postgres
+    image: postgres:16  # Using 16 is stable and avoids the v18 mount layout issues
     container_name: expenses-db
     environment:
       POSTGRES_USER: postgres
@@ -10,6 +21,12 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data # Standard path for v16
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
