@@ -22,19 +22,21 @@ SessionLocal = sessionmaker(expire_on_commit=False, class_=AsyncSession, bind=en
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-from contextlib import asynccontextmanager
-
-@asynccontextmanager
-async def lifespan(app):
-    await init_db()
-    yield
-
-mcp = FastMCP("Expense Tracker MCP", lifespan=lifespan)
-
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
-mcp = FastMCP("MyServer")
+from fastmcp.server.lifespan import lifespan
+
+@lifespan
+async def app_lifespan(server):
+    # Setup: runs once when server starts
+    print("Starting up...")
+    await init_db()
+    try:
+        yield {"started_at": "2024-01-01"}
+    finally:
+        # Teardown: runs when server stops
+        print("Shutting down...")
 
 # Configure CORS for browser-based clients
 middleware = [
@@ -51,6 +53,8 @@ middleware = [
         expose_headers=["mcp-session-id"],
     )
 ]
+
+mcp = FastMCP("Expense Tracker MCP", lifespan=app_lifespan)
 # ------------------- MCP Tools -------------------
 
 @mcp.tool

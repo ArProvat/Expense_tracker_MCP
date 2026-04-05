@@ -7,12 +7,15 @@ services:
       - "8888:8888"
     depends_on:
       postgres:
-        condition: service_healthy  # Wait for the healthcheck to pass
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/expenses
+    networks:
+      - shared_network      # ✅ so expense_agent can reach it
+      - internal            # ✅ so it can reach postgres
 
   postgres:
-    image: postgres:16  # Using 16 is stable and avoids the v18 mount layout issues
+    image: postgres:16
     container_name: expenses-db
     environment:
       POSTGRES_USER: postgres
@@ -21,12 +24,20 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Standard path for v16
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - internal            # ✅ postgres only on internal, not exposed to agent
 
 volumes:
   postgres_data:
+
+networks:
+  shared_network:
+    external: true          # ✅ shared with expense_agent
+  internal:
+    driver: bridge          # ✅ private network between mcp and postgres
